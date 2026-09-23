@@ -1,0 +1,227 @@
+{
+  "name": "[Social Media] Buffer to Slack Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.buffer.com",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"query GetOrganizations { account { organizations { id name } } }\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -560,
+        -240
+      ],
+      "id": "ce9fc23a-9442-45e8-a7f9-e2c74712d5a7",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "hoTZ6QsfTBs8ScJr",
+          "name": "Buffer API - Jenny"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.buffer.com",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"query GetChannels { channels(input: { organizationId: \\\"{{$json.data.account.organizations[0].id}}\\\" }) { id name displayName service avatar isQueuePaused } }\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -368,
+        -240
+      ],
+      "id": "f87e7ecf-9d31-4fd1-8ca6-b1d8f498dd2f",
+      "name": "Get channels",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "hoTZ6QsfTBs8ScJr",
+          "name": "Buffer API - Jenny"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.buffer.com",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"query GetDraftPosts { posts(first: 20, input: { organizationId: \\\"{{$node['HTTP Request'].json['data']['account']['organizations'][0]['id']}}\\\", filter: { status: [draft] } }) { edges { node { id text dueAt createdAt channelId channel { id name displayName service } assets { thumbnail } } } } }\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -160,
+        -240
+      ],
+      "id": "720d5186-a6aa-483c-848c-2113e12a88b5",
+      "name": "Get draft posts",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "hoTZ6QsfTBs8ScJr",
+          "name": "Buffer API - Jenny"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "trigger": [
+          "app_mention"
+        ],
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C042VJ8E7DX"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        -240
+      ],
+      "id": "622f1a66-505a-40bf-af48-b8fe4adca91f",
+      "name": "Slack Trigger",
+      "webhookId": "73d1e49d-6dbf-4605-abf0-21aa89c04869",
+      "credentials": {
+        "slackApi": {
+          "id": "BdkiVZVfqbkwYHUJ",
+          "name": "Spiking Social Media"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const edges = $input.first().json.data?.posts?.edges || [];\n\nconst blocks = [\n  {\n    type: \"header\",\n    text: {\n      type: \"plain_text\",\n      text: \"Buffer Draft Posts This Week\"\n    }\n  },\n  {\n    type: \"section\",\n    text: {\n      type: \"mrkdwn\",\n      text: \"Here are the current draft posts from Buffer.\"\n    }\n  },\n  {\n    type: \"divider\"\n  }\n];\n\nfor (const [index, edge] of edges.entries()) {\n  const post = edge.node || {};\n\n  const channelName =\n    post.channel?.displayName ||\n    post.channel?.name ||\n    post.channelId ||\n    \"Unknown channel\";\n\n  const platform =\n    post.channel?.service ||\n    \"Unknown platform\";\n\n  const text =\n    post.text?.trim() ||\n    \"(no text)\";\n\n  // ✅ Added publish date\n  const dueDate = post.dueAt\n    ? new Date(post.dueAt).toLocaleString(\"en-SG\", {\n        timeZone: \"Asia/Singapore\"\n      })\n    : \"Not scheduled\";\n\n  const imageUrl = post.assets?.[0]?.thumbnail;\n\n  blocks.push({\n    type: \"section\",\n    text: {\n      type: \"mrkdwn\",\n      text: `*Channel:* ${channelName}\\n*Platform:* ${platform}\\n*Publish:* ${dueDate}\\n*Text:* ${text}`\n    }\n  });\n\n  if (imageUrl) {\n    blocks.push({\n      type: \"image\",\n      image_url: imageUrl,\n      alt_text: post.assets?.[0]?.image?.altText || \"draft image\"\n    });\n  }\n\n  if (index < edges.length - 1) {\n    blocks.push({ type: \"divider\" });\n  }\n}\n\nreturn [\n  {\n    json: {\n      text: `Buffer Draft Posts This Week (${edges.length})`,\n      blocks\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        -240
+      ],
+      "id": "3537aed8-edd4-475b-940d-2ce1e5034e1a",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        256,
+        -240
+      ],
+      "id": "8c6f31b5-f157-4b52-9adf-64008867f28e",
+      "name": "Send updates to Slack"
+    },
+    {
+      "parameters": {
+        "content": "## Setup required\n\nThis workflow needs two credentials before it will run:\n\n**1. Slack Incoming Webhook URL** (used in \"Send updates to Slack\")\n- Go to https://api.slack.com/apps -> your app (or create one) -> **Incoming Webhooks**\n- Turn on Incoming Webhooks, click **Add New Webhook to Workspace**, pick the channel\n- Copy the generated URL (`https://hooks.slack.com/services/...`) and paste it into the node's `url` field, replacing the placeholder\n\n**2. Buffer API bearer token** (used in \"HTTP Request\", \"Get channels\", \"Get draft posts\")\n- Go to https://buffer.com/developers/apps, create/select an app\n- Generate an **Access Token**\n- In n8n, create a new credential of type **Bearer Auth** (or **HTTP Bearer Auth**) with that token, then select it in each of the three Buffer HTTP Request nodes",
+        "height": 420,
+        "width": 460
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        -520
+      ],
+      "id": "d6e6d3a1-7d0a-4b3d-9d3a-2f8e4c1b9a10",
+      "name": "Setup instructions"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Get channels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get channels": {
+      "main": [
+        [
+          {
+            "node": "Get draft posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get draft posts": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send updates to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "16414c2f-9965-4601-893b-da6746450d17",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9cb2d94931ffd3e289404956161cdb150b4c9a88593bbac1bb3a7fce654d760d"
+  },
+  "id": "f5Da6bDQ7eFXHY8F",
+  "tags": []
+}
